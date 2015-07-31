@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+  <head>
+     <script type="text/javascript" src="static/jquery-1.7.2.js"></script>
+     <script type="text/javascript" src="static/jquery.eventsource.js"></script>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap-theme.min.css">
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/js/bootstrap.min.js"></script>
+     <script src="https://maps.googleapis.com/maps/api/js"></script>
+     <script src="http://google-maps-utility-library-v3.googlecode.com/svn/tags/markerclusterer/1.0/src/data.json" type="text/javascript"></script>
+     <script type="text/javascript" src="http://google-maps-utility-library-v3.googlecode.com/svn/tags/markerclusterer/1.0/src/markerclusterer.js"></script>
+
+     <link href="static/bootstrap.min.css" rel="stylesheet">
+
+     <script type="text/javascript">
+      var script = '<script type="text/javascript" src="static/markerclusterer';
+      if (document.location.search.indexOf('packed') !== -1) {
+        script += '_packed';
+      }
+      if (document.location.search.indexOf('compiled') !== -1) {
+        script += '_compiled';
+      }
+      script += '.js"><' + '/script>';
+      document.write(script);
+
+      var markerClusterer = null;
+      var map = null;
+     </script>
+  </head>
+
+  <body onload="initialize()">
+    <nav class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+      <div class="container">
+        <div class="navbar-header">
+          <a class="navbar-brand" href="#">Project name : <br/>TweetsMap</a>
+          <p style="color: #00ff00;">This is a small application for a simple application crawling and presenting the twitter via twitter and google APIs.<br>Researchers: Sergio Suarez , Hector Mosquera</p>
+        </div>
+      </div>
+    </nav>
+
+
+    <div id="map_canvas" style="margin-top: 70px; width: 100%;height: 725px;"></div>
+
+      <script type="text/javascript">
+
+        var map, pointarray, heatmap;
+        var marker,infowindow,grid;
+        var markers = [];
+        var grids=[];
+        var e = document.getElementById("select");
+        var kwd = String(e.options[e.selectedIndex].value);
+        var Data = [
+          new google.maps.LatLng(37.782551, -122.445368)
+        ];
+
+          function initialize() {
+            var config = {
+              "radius": 30,
+              "element": "map_canvas",
+              "visible": true,
+              "opacity": 40,
+              "gradient": {
+                0.45: "rgb(0,0,255)",
+                0.55: "rgb(0,255,255)",
+                0.65: "rgb(0,255,0)",
+                0.95: "yellow",
+                1.0: "rgb(255,0,0)"
+              }
+            };
+
+            var myOptions = {
+              zoom: 7,
+              center: new google.maps.LatLng(-2.1842158,-78.900503),
+              mapTypeId: google.maps.MapTypeId.ROADMAP
+            };
+
+            map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
+            map.setCenter({lat: -2.1842158, lng: -78.900503});
+
+            //-4.456056  -3.481238 -81.489998  -79.926498
+
+            google.maps.event.addListener(map, "idle", function() {
+
+              {% for tw in twets %}
+              marker = new google.maps.Marker({
+                position: new google.maps.LatLng("{{ tw.latitude }}", "{{ tw.longitude }}"),
+                // {lat: "{{ tw.longitude }}", lng: "{{ tw.latitude }}"},
+                draggable: false,
+                map: map,
+                icon:"static/streaming.png",
+                title: "{{ tw.text_id }}"+ " : " + "{{ tw.text_msg }}"+ " (" +"{{ tw.tweet_date}}" + " )",
+              });
+              markers.push(marker);
+              attachMessage(marker);
+              {% endfor %}
+
+              {% for bb in bbs %}
+              grid = new google.maps.Rectangle({
+                strokeColor: '#2E2EFE',
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillOpacity: 0.35,
+                map: map,
+                title: "{{ bb.id_grid }}",
+                bounds: new google.maps.LatLngBounds(
+                    new google.maps.LatLng("{{ bb.lat_ini }}", "{{ bb.long_ini }}"),
+                    new google.maps.LatLng("{{ bb.lat_fin }}", "{{ bb.long_fin }}"))
+              });
+              grids.push(grid);
+              seeinforect(grid);
+              {% endfor %}
+
+              markerCluster = new MarkerClusterer(map, markers);
+
+            });
+
+            markerClusterer = new MarkerClusterer(map, markers, {
+              maxZoom: 7,
+              gridSize: 50,
+              styles: "Conversation"
+            });
+
+            google.maps.event.addDomListener(window, 'load', initialize);
+            function attachMessage(marker){
+              infowindow = new google.maps.InfoWindow({
+                content: marker.title
+              });
+
+              google.maps.event.addListener(marker, "click", function() {
+                infowindow.open(map,marker);
+                map.setZoom(9);
+                map.setCenter(marker.getPosition());
+              });
+            }
+
+            function seeinforect(grid){
+              //infowindow = new google.maps.InfoWindow({
+              //content: marker.title
+              //});
+
+              google.maps.event.addListener(grid, "click", function() {
+                //infowindow.open(map,grid);
+                //map.setZoom(9);
+                //map.setCenter(grid.getPosition());
+                console.log('click en grid'+grid.title);
+                alert('Cargando informacion del grid: '+grid.title);
+              });
+            }
+
+            e.onchange=function(){
+              $.ajax({
+                url: "http://127.0.0.1:8000/api/tweet/?format=json&kwd="+ e.options[e.selectedIndex].value,
+                success: function(data) {
+                  deleteMarkers();
+                  for (var key in data.objects) {
+                    var item = data.objects[key]
+                    marker = new google.maps.Marker({
+                      position: {lat: item.lon, lng: item.lat},
+                      draggable: false,
+                      map: map,
+                      icon:"static/streaming.png",
+                      title: item.tid + " : " + item.text + " (" +item.time + " )",
+                    });
+                    markers.push(marker);
+                    attachMessage(marker);
+                  }
+                  var markerCluster = new MarkerClusterer(map, markers);
+                },
+              });
+            }
+            function deleteMarkers() {
+              clearMarkers();
+              markers = [];
+            }
+            function clearMarkers() {
+              setAllMap(null);
+            }
+            function setAllMap(map) {
+              for (var i = 0; i < markers.length; i++) {
+                markers[i].setMap(map);
+              }
+            }
+          }
+      </script>
+
+    <!-- footer -->
+        <div class="footer" style="background-color:black;">
+            <div class="container">
+                <div  style="color:white" class="col-md-4 get">
+                    <h3 style="color:white">Ubicacion</h3>
+                    <p>Guayaquil, ESPOL.</p>
+                    <p>Cel.: 09-88928041</p>
+                    <p><i>Sergio Suarez - Hector Mosquera </i><br/>E-mail: <a href="mailto:info@company.com">ssuarez@fiec.espol.edu.ec</a></p>
+                </div>
+                <div  style="color:white" class="col-md-4 follow">
+                    <h3  >Siguenos</h3>
+                    <div class="social">
+                            <ul>
+                                <li><a href="https://www.facebook.com/sergio.suarez10"><i class="facebok"> </i>FB Sergio Suarez</a></li>
+                                <li><a href="https://www.facebook.com/IngenioMusical"><i class="facebok"> </i>FB Hector Mosquera</a></li>
+                                <li><a href="https://www.linkedin.com/profile/view?id=70494058"><i class="in"> </i>LN Sergio Suarez</a></li>
+                                    <div class="clearfix"></div>    
+                            </ul>
+                        </div>
+                </div>
+                <div  style="color:white" class="col-md-4 join">
+                    <h3>Registrate</h3>
+                    <p>Y te mantendremos informados de las alertas.</p>
+                    <a href="#" class="btn  btn-1c">REGISTRATE</a>
+                </div>
+            </div>
+        </div>
+    <!-- footer -->
+
+
+  </body>
+
+</html>
